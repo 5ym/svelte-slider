@@ -2,6 +2,8 @@
 
 フリック速度の計算等によりスマホに近いスライド操作を実現したスライダー。
 
+動作サンプル: https://5ym.github.io/svelte-slider/
+
 元の jQuery 実装(`slider.js`)を廃止し、**Svelte 5(runes)コンポーネント**
 `src/lib/Slider.svelte` に書き換えたものです。依存は Svelte のみで、jQuery は使いません。
 
@@ -39,3 +41,5 @@ bun run dev      # 開発サーバー
 bun run build    # dist/ に静的ビルド(相対パスなのでそのまま配置可能)
 bun run check    # svelte-check
 ```
+
+`master` への push で GitHub Actions がビルドし GitHub Pages へ自動デプロイします。
