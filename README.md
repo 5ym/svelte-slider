@@ -22,7 +22,7 @@
 ## インストール
 
 npm レジストリには未公開です。GitHub の `release` ブランチ(ビルド済み)から直接インストールします。
-`#v2.0.0` のようにタグを指定するとバージョンを固定できます。Svelte 5.29 以上が必要です。
+`#v3.0.0` のようにタグを指定するとバージョンを固定できます。Svelte 5.29 以上が必要です。
 
 ```shell
 bun add github:5ym/svelte-slider#release
@@ -83,11 +83,16 @@ npm 12 以降は git 依存がデフォルトで無効なので `--allow-git=roo
 ```shell
 bun install
 bun run dev      # 開発サーバー
-bun run build    # サンプルサイトを build/ に静的ビルド(相対パスなのでそのまま配置可能)
-bun run package  # ライブラリを dist/ にビルド(svelte-package)
-bun run check    # svelte-check
+bun run build    # サンプルサイト(demo/)を build/ に静的ビルド
+bun run package  # ライブラリ(src/)を dist/ にビルド
+bun run check    # 型チェック(svelte-check)
+bun run test     # ブラウザでの操作テスト(Playwright。初回は bunx playwright install chromium)
 ```
 
-`m` への push で GitHub Actions がビルドし GitHub Pages へ自動デプロイします。
-`src/` などライブラリに関わる変更が `m` に入ると、別の workflow がライブラリをビルドして `release` ブランチへコミットします。
-`package.json` の `version` を上げると、そのバージョンのタグ(`v2.0.1` など)も自動で作られます。
+GitHub Actions(`.github/workflows/ci.yml`)が PR と `m` への push で型チェック・配布設定のチェック(publint)・テストを実行します。
+`m` への push でそれらが通ると、サンプルサイトを GitHub Pages へデプロイし、ビルド済みライブラリを `release` ブランチへコミットします。
+`package.json` の `version` を上げると、そのバージョンのタグ(`v3.0.1` など)も自動で作られます。
+
+## ライセンス
+
+MIT

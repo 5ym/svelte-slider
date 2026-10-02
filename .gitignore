@@ -4,3 +4,5 @@ build
 *.log
 .DS_Store
 .svelte-kit
+test-results
+playwright-report

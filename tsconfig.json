@@ -15,5 +15,12 @@
 			"svelte-slider": ["./src/index.ts"]
 		}
 	},
-	"include": ["src/**/*.ts", "demo/**/*.ts", "demo/**/*.svelte", "vite.config.ts"]
+	"include": [
+		"src/**/*.ts",
+		"demo/**/*.ts",
+		"demo/**/*.svelte",
+		"tests/**/*.ts",
+		"vite.config.ts",
+		"playwright.config.ts"
+	]
 }

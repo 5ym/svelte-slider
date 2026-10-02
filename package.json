@@ -1,8 +1,8 @@
 {
 	"name": "svelte-slider",
-	"version": "2.0.0",
+	"version": "3.0.0",
 	"type": "module",
-	"description": "スマホに近いスライド操作(フリック速度可変)の Svelte スライダー",
+	"description": "スマホに近いスライド操作(フリック速度可変)のヘッドレス Svelte スライダー",
 	"keywords": [
 		"svelte",
 		"slider",
@@ -10,15 +10,13 @@
 		"headless",
 		"swipe"
 	],
-	"license": "AGPL-3.0-only",
+	"license": "MIT",
 	"repository": "github:5ym/svelte-slider",
 	"homepage": "https://5ym.github.io/svelte-slider/",
 	"files": [
-		"dist",
-		"!dist/**/*.test.*"
+		"dist"
 	],
 	"sideEffects": false,
-	"svelte": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"exports": {
 		".": {
@@ -32,16 +30,20 @@
 		"build": "vite build",
 		"preview": "vite preview",
 		"package": "svelte-package -i src",
-		"check": "svelte-check --tsconfig ./tsconfig.json"
+		"lint:package": "publint",
+		"check": "svelte-check --tsconfig ./tsconfig.json",
+		"test": "playwright test"
 	},
 	"peerDependencies": {
 		"svelte": "^5.29.0"
 	},
 	"devDependencies": {
 		"@anyblades/blades": "^3.0.0",
+		"@playwright/test": "^1.63.0",
 		"@sveltejs/package": "^3.0.0",
 		"@sveltejs/vite-plugin-svelte": "^7.3.0",
 		"@types/node": "^26.6.4",
+		"publint": "^0.3.25",
 		"svelte": "^5.56.8",
 		"svelte-check": "^4.7.5",
 		"typescript": "~6.0.3",
