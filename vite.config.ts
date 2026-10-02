@@ -46,5 +46,7 @@ function virtualIndexHtml(): Plugin {
 export default defineConfig({
 	plugins: [virtualIndexHtml(), svelte()],
 	// 相対パスにして GitHub Pages 等にそのまま置けるようにする
-	base: './'
+	base: './',
+	// dist/ はライブラリ(svelte-package)の出力先なので、サンプルサイトは build/ へ
+	build: { outDir: 'build' }
 });

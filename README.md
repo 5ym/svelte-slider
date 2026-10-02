@@ -19,11 +19,25 @@
 - スライド幅は CSS で自由(1 枚表示・複数枚表示・ピーク表示など)。リサイズに追従
 - `prefers-reduced-motion` でボタン等のアニメーションを無効化
 
+## インストール
+
+npm レジストリには未公開です。GitHub の `release` ブランチ(ビルド済み)から直接インストールします。
+`#v2.0.0` のようにタグを指定するとバージョンを固定できます。Svelte 5.29 以上が必要です。
+
+```shell
+bun add github:5ym/svelte-slider#release
+pnpm add github:5ym/svelte-slider#release
+npm i --allow-git=root github:5ym/svelte-slider#release
+```
+
+npm 12 以降は git 依存がデフォルトで無効なので `--allow-git=root` が必要です
+(プロジェクトの `.npmrc` に `allow-git=root` を書いても可)。
+
 ## 使い方
 
 ```svelte
 <script lang="ts">
-	import { Slider } from './lib';
+	import { Slider } from 'svelte-slider';
 
 	const slider = new Slider({ autoplay: 4000, rewind: true, duration: 400 });
 </script>
@@ -69,8 +83,11 @@
 ```shell
 bun install
 bun run dev      # 開発サーバー
-bun run build    # dist/ に静的ビルド(相対パスなのでそのまま配置可能)
+bun run build    # サンプルサイトを build/ に静的ビルド(相対パスなのでそのまま配置可能)
+bun run package  # ライブラリを dist/ にビルド(svelte-package)
 bun run check    # svelte-check
 ```
 
 `master` への push で GitHub Actions がビルドし GitHub Pages へ自動デプロイします。
+`src/lib` などライブラリに関わる変更が `master` に入ると、別の workflow がライブラリをビルドして `release` ブランチへコミットします。
+`package.json` の `version` を上げると、そのバージョンのタグ(`v2.0.1` など)も自動で作られます。

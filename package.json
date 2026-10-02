@@ -1,18 +1,45 @@
 {
 	"name": "svelte-slider",
 	"version": "2.0.0",
-	"private": true,
 	"type": "module",
 	"description": "スマホに近いスライド操作(フリック速度可変)の Svelte スライダー",
+	"keywords": [
+		"svelte",
+		"slider",
+		"carousel",
+		"headless",
+		"swipe"
+	],
+	"license": "AGPL-3.0-only",
 	"repository": "github:5ym/svelte-slider",
+	"homepage": "https://5ym.github.io/svelte-slider/",
+	"files": [
+		"dist",
+		"!dist/**/*.test.*"
+	],
+	"sideEffects": false,
+	"svelte": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"svelte": "./dist/index.js",
+			"default": "./dist/index.js"
+		}
+	},
 	"scripts": {
 		"dev": "vite",
 		"build": "vite build",
 		"preview": "vite preview",
+		"package": "svelte-package -i src/lib",
 		"check": "svelte-check --tsconfig ./tsconfig.json"
+	},
+	"peerDependencies": {
+		"svelte": "^5.29.0"
 	},
 	"devDependencies": {
 		"@anyblades/blades": "^3.0.0",
+		"@sveltejs/package": "^3.0.0",
 		"@sveltejs/vite-plugin-svelte": "^7.3.0",
 		"@types/node": "^26.6.4",
 		"svelte": "^5.56.8",
