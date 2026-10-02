@@ -85,7 +85,7 @@ bun install
 bun run dev      # 開発サーバー
 bun run build    # サンプルサイト(demo/)を build/ に静的ビルド
 bun run package  # ライブラリ(src/)を dist/ にビルド
-bun run check    # 型チェック(svelte-check)
+bun run check    # 型チェック(svelte-check。TypeScript 7 の tsgo で実行)
 bun run test     # ブラウザでの操作テスト(Playwright。初回は bunx playwright install chromium)
 ```
 

@@ -1,6 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
-const port = 4173;
+// vite preview の既定 (4173) は他のアプリとぶつかりやすいので避ける
+const port = Number(process.env.TEST_PORT ?? 4317);
 
 export default defineConfig({
 	testDir: 'tests',
