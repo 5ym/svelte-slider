@@ -88,6 +88,6 @@ bun run package  # ライブラリを dist/ にビルド(svelte-package)
 bun run check    # svelte-check
 ```
 
-`master` への push で GitHub Actions がビルドし GitHub Pages へ自動デプロイします。
-`src/lib` などライブラリに関わる変更が `master` に入ると、別の workflow がライブラリをビルドして `release` ブランチへコミットします。
+`m` への push で GitHub Actions がビルドし GitHub Pages へ自動デプロイします。
+`src/lib` などライブラリに関わる変更が `m` に入ると、別の workflow がライブラリをビルドして `release` ブランチへコミットします。
 `package.json` の `version` を上げると、そのバージョンのタグ(`v2.0.1` など)も自動で作られます。
