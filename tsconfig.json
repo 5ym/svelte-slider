@@ -10,7 +10,10 @@
 		"esModuleInterop": true,
 		"forceConsistentCasingInFileNames": true,
 		"verbatimModuleSyntax": true,
-		"types": ["svelte", "vite/client", "node"]
+		"types": ["svelte", "vite/client", "node"],
+		"paths": {
+			"svelte-slider": ["./src/index.ts"]
+		}
 	},
-	"include": ["src/**/*.ts", "src/**/*.svelte", "vite.config.ts"]
+	"include": ["src/**/*.ts", "demo/**/*.ts", "demo/**/*.svelte", "vite.config.ts"]
 }

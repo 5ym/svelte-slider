@@ -11,7 +11,7 @@ const html = `<!doctype html>
 	</head>
 	<body>
 		<div id="app"></div>
-		<script type="module" src="/src/main.ts"></script>
+		<script type="module" src="/main.ts"></script>
 	</body>
 </html>
 `;
@@ -43,10 +43,18 @@ function virtualIndexHtml(): Plugin {
 	};
 }
 
+const here = (path: string) => resolve(import.meta.dirname, path);
+
+// ライブラリは src/、サンプルサイトは demo/
 export default defineConfig({
-	plugins: [virtualIndexHtml(), svelte()],
+	root: here('demo'),
+	plugins: [virtualIndexHtml(), svelte({ configFile: here('svelte.config.ts') })],
+	resolve: {
+		// サンプルからも利用者と同じパッケージ名で読み込む
+		alias: { 'svelte-slider': here('src/index.ts') }
+	},
 	// 相対パスにして GitHub Pages 等にそのまま置けるようにする
 	base: './',
 	// dist/ はライブラリ(svelte-package)の出力先なので、サンプルサイトは build/ へ
-	build: { outDir: 'build' }
+	build: { outDir: here('build'), emptyOutDir: true }
 });

@@ -6,7 +6,7 @@ on:
   push:
     branches: [m]
     paths:
-      - src/lib/**
+      - src/**
       - package.json
       - bun.lock
       - README.md

@@ -6,7 +6,7 @@
 
 元の jQuery 実装を Svelte 5(runes)で書き直した **ヘッドレス UI** です。
 見た目は一切持たず、状態・操作・要素に spread する属性だけを `Slider` クラスが提供します。
-サンプル(`src/App.svelte`)は [Blades CSS](https://blades.dev/) でスタイリングしています。
+サンプル(`demo/`)は [Blades CSS](https://blades.dev/) でスタイリングしています。
 
 ## 機能
 
@@ -89,5 +89,5 @@ bun run check    # svelte-check
 ```
 
 `m` への push で GitHub Actions がビルドし GitHub Pages へ自動デプロイします。
-`src/lib` などライブラリに関わる変更が `m` に入ると、別の workflow がライブラリをビルドして `release` ブランチへコミットします。
+`src/` などライブラリに関わる変更が `m` に入ると、別の workflow がライブラリをビルドして `release` ブランチへコミットします。
 `package.json` の `version` を上げると、そのバージョンのタグ(`v2.0.1` など)も自動で作られます。

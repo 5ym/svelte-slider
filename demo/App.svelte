@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Slider } from './lib';
+	import { Slider } from 'svelte-slider';
 
 	const hero = new Slider({ autoplay: 4000 });
 	const cards = new Slider({ autoplay: 0, rewind: false });

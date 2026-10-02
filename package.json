@@ -31,7 +31,7 @@
 		"dev": "vite",
 		"build": "vite build",
 		"preview": "vite preview",
-		"package": "svelte-package -i src/lib",
+		"package": "svelte-package -i src",
 		"check": "svelte-check --tsconfig ./tsconfig.json"
 	},
 	"peerDependencies": {
