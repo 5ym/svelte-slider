@@ -14,13 +14,17 @@ export interface SliderOptions {
 const FLICK_VELOCITY = 0.3;
 /** ドラッグ開始とみなす移動量 (px)。これ未満はタップ扱い */
 const DRAG_THRESHOLD = 6;
-/** 離す直前のこの時間 (ms) の動きから速度を求める */
-const VELOCITY_WINDOW = 100;
-const MIN_FLICK_DURATION = 120;
-const MAX_FLICK_DURATION = 500;
+/**
+ * 離す直前のこの時間 (ms) の動きから速度を求める。
+ * フリックは離す直前に加速するので、長く取ると平均に引っ張られて遅く見積もってしまう
+ */
+const VELOCITY_WINDOW = 40;
+const MIN_FLICK_DURATION = 80;
+const MAX_FLICK_DURATION = 350;
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
-const easeOutCubic = (t: number) => 1 - (1 - t) ** 3;
+/** 等減速(初速 = 2 * 距離 / 時間)。cubic より終盤のもたつきが少ない */
+const easeOutQuad = (t: number) => 1 - (1 - t) ** 2;
 const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2);
 
 /** 端を越えて引っ張ったときの抵抗(iOS のラバーバンド相当) */
@@ -379,13 +383,13 @@ export class Slider {
 		this.index = target;
 		const to = this.#snaps[target] ?? 0;
 		const distance = Math.abs(to - offset);
-		// ease-out の初速 (3 * 距離 / 時間) が指の速度と揃うように時間を決める
+		// 初速 (2 * 距離 / 時間) が離した瞬間の指の速度と揃うように時間を決める
 		const speed = Math.abs(velocity);
 		const duration =
 			speed > FLICK_VELOCITY
-				? clamp((3 * distance) / speed, MIN_FLICK_DURATION, MAX_FLICK_DURATION)
+				? clamp((2 * distance) / speed, MIN_FLICK_DURATION, MAX_FLICK_DURATION)
 				: clamp(distance * 1.2, MIN_FLICK_DURATION, this.duration);
-		this.#animateTo(to, duration, easeOutCubic);
+		this.#animateTo(to, duration, easeOutQuad);
 	}
 
 	// ------------------------------------------------------------------
@@ -431,7 +435,11 @@ export class Slider {
 		else if (offset > this.#max) offset = this.#max + rubberBand(offset - this.#max, this.#width);
 		this.#setOffset(offset);
 
-		g.samples.push({ x: e.clientX, t: e.timeStamp });
+		// ブラウザがフレーム単位にまとめた move も拾って速度の精度を上げる
+		const events = e.getCoalescedEvents?.() ?? [];
+		for (const ev of events.length ? events : [e]) {
+			g.samples.push({ x: ev.clientX, t: ev.timeStamp });
+		}
 		while (g.samples.length > 2 && e.timeStamp - g.samples[0].t > VELOCITY_WINDOW) {
 			g.samples.shift();
 		}
