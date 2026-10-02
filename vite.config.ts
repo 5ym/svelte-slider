@@ -7,7 +7,7 @@ const here = (path: string) => resolve(import.meta.dirname, path);
 // ライブラリは src/、サンプルサイトは demo/
 export default defineConfig({
 	root: here('demo'),
-	plugins: [svelte({ configFile: here('svelte.config.ts') })],
+	plugins: [svelte()],
 	resolve: {
 		// サンプルからも利用者と同じパッケージ名で読み込む
 		alias: { 'svelte-slider': here('src/index.ts') }

@@ -1,5 +1,6 @@
 import { untrack } from 'svelte';
 import { createAttachmentKey, type Attachment } from 'svelte/attachments';
+import { on } from 'svelte/events';
 
 export interface SliderOptions {
 	/** 自動スライドの間隔 (ms)。0 で無効。既定 4000 */
@@ -56,14 +57,14 @@ export class Slider {
 	count = $state(0);
 	/** ユーザーがドラッグ中か */
 	dragging = $state(false);
-	/** 自動スライド間隔 (ms)。0 で無効。 */
+	/** 以下の設定は実行中にも変更できる。意味は SliderOptions を参照 */
 	autoplay = $state(4000);
-	/** 自動スライドを手動で止めているか(再生/停止ボタン用) */
-	paused = $state(false);
 	rewind = $state(true);
 	duration = $state(400);
+	/** 自動スライドを手動で止めているか(再生/停止ボタン用) */
+	paused = $state(false);
 
-	#id = `slider-${++uid}`;
+	#trackId = `slider-${++uid}-track`;
 	#viewport: HTMLElement | undefined;
 	#track: HTMLElement | undefined;
 	#snaps: number[] = [];
@@ -95,9 +96,9 @@ export class Slider {
 	#rootKey = createAttachmentKey();
 
 	constructor(options: SliderOptions = {}) {
-		this.autoplay = options.autoplay ?? 4000;
-		this.rewind = options.rewind ?? true;
-		this.duration = options.duration ?? 400;
+		this.autoplay = options.autoplay ?? this.autoplay;
+		this.rewind = options.rewind ?? this.rewind;
+		this.duration = options.duration ?? this.duration;
 	}
 
 	get canPrev() {
@@ -168,7 +169,7 @@ export class Slider {
 
 	get track() {
 		return {
-			id: `${this.#id}-track`,
+			id: this.#trackId,
 			[this.#trackKey]: this.#attachTrack
 		};
 	}
@@ -186,7 +187,7 @@ export class Slider {
 		return {
 			type: 'button',
 			'aria-label': '前へ',
-			'aria-controls': `${this.#id}-track`,
+			'aria-controls': this.#trackId,
 			disabled: !this.canPrev,
 			onclick: () => this.prev()
 		} as const;
@@ -196,7 +197,7 @@ export class Slider {
 		return {
 			type: 'button',
 			'aria-label': '次へ',
-			'aria-controls': `${this.#id}-track`,
+			'aria-controls': this.#trackId,
 			disabled: !this.canNext,
 			onclick: () => this.next()
 		} as const;
@@ -206,7 +207,7 @@ export class Slider {
 		return {
 			type: 'button',
 			'aria-label': `スライド ${i + 1}`,
-			'aria-controls': `${this.#id}-track`,
+			'aria-controls': this.#trackId,
 			'aria-current': i === this.index ? 'true' : undefined,
 			'data-active': i === this.index || undefined,
 			onclick: () => this.goTo(i)
@@ -228,9 +229,7 @@ export class Slider {
 	// ------------------------------------------------------------------
 
 	#attachRoot: Attachment<HTMLElement> = () => {
-		const onVisibility = () => (this.#hidden = document.hidden);
-		onVisibility();
-		document.addEventListener('visibilitychange', onVisibility);
+		this.#hidden = document.hidden;
 
 		// 自動スライド。index が変わる(=何か操作された)たびにタイマーを掛け直す
 		$effect(() => {
@@ -240,7 +239,7 @@ export class Slider {
 			return () => clearTimeout(timer);
 		});
 
-		return () => document.removeEventListener('visibilitychange', onVisibility);
+		return on(document, 'visibilitychange', () => (this.#hidden = document.hidden));
 	};
 
 	#attachViewport: Attachment<HTMLElement> = (node) => {
@@ -250,22 +249,21 @@ export class Slider {
 		node.style.touchAction = 'pan-y';
 		node.style.overscrollBehaviorX = 'contain';
 
-		const listeners: [string, EventListener, AddEventListenerOptions?][] = [
-			['pointerdown', this.#onPointerDown as EventListener],
-			['pointermove', this.#onPointerMove as EventListener],
-			['pointerup', this.#onPointerUp as EventListener],
-			['pointercancel', this.#onPointerCancel as EventListener],
-			['lostpointercapture', this.#onLostCapture as EventListener],
-			['click', this.#onClickCapture as EventListener, { capture: true }],
-			['dragstart', preventDefault],
-			['scroll', this.#onScroll]
+		const offs = [
+			on(node, 'pointerdown', this.#onPointerDown),
+			on(node, 'pointermove', this.#onPointerMove),
+			on(node, 'pointerup', this.#onPointerUp),
+			on(node, 'pointercancel', this.#onPointerCancel),
+			on(node, 'lostpointercapture', this.#onLostCapture),
+			on(node, 'click', this.#onClickCapture, { capture: true }),
+			on(node, 'dragstart', (e) => e.preventDefault()),
+			on(node, 'scroll', this.#onScroll)
 		];
-		for (const [type, fn, opts] of listeners) node.addEventListener(type, fn, opts);
-		untrack(() => this.#measure());
+		this.#measure();
 
 		return () => {
-			for (const [type, fn, opts] of listeners) node.removeEventListener(type, fn, opts);
-			cancelAnimationFrame(this.#raf);
+			for (const off of offs) off();
+			this.#stop();
 			this.#viewport = undefined;
 		};
 	};
@@ -288,7 +286,7 @@ export class Slider {
 		});
 		mutation.observe(node, { childList: true });
 		observeChildren();
-		untrack(() => this.#measure());
+		this.#measure();
 
 		return () => {
 			resize.disconnect();
@@ -478,7 +476,7 @@ export class Slider {
 		}
 		this.#viewport?.style.removeProperty('user-select');
 		this.dragging = false;
-		// 掴んで止めた場合も含め、必ずスナップ位置へ戻す
+		// 掴んで止めただけの場合も含め、必ずスナップ位置へ戻す
 		this.#release(velocity, from);
 		// ドラッグ後に click が来なかった場合に備えて解除
 		setTimeout(() => (this.#suppressClick = false));
@@ -533,10 +531,6 @@ export class Slider {
 		const root = e.currentTarget as HTMLElement;
 		if (!root.contains(e.relatedTarget as Node | null)) this.#focused = false;
 	};
-}
-
-function preventDefault(e: Event) {
-	e.preventDefault();
 }
 
 function reducedMotion() {

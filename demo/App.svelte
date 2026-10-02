@@ -25,7 +25,7 @@
 			<div class="viewport" {...hero.viewport}>
 				<div {...hero.track}>
 					{#each slides as s, i (s.title)}
-						<a href="#{i + 1}" class="slide hero-slide" style:--hue={s.hue} {...hero.slide(i)}>
+						<a href="#{i + 1}" class="slide" style:--hue={s.hue} {...hero.slide(i)}>
 							<strong>{s.title}</strong>
 							<span>{s.text}</span>
 						</a>
