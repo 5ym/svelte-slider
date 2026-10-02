@@ -1,0 +1,10 @@
+@import "@anyblades/blades";
+
+/* Blades (Pico) は [role="group"] をボタングループとして装飾するため、スライドでは打ち消す */
+[aria-roledescription="slide"] {
+	display: block;
+	margin-bottom: 0;
+}
+[aria-roledescription="slide"] > * {
+	flex: initial;
+}
