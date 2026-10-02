@@ -1,0 +1,31 @@
+{
+  "name": "svelte-slider",
+  "version": "3.0.0",
+  "type": "module",
+  "description": "スマホに近いスライド操作(フリック速度可変)のヘッドレス Svelte スライダー",
+  "keywords": [
+    "svelte",
+    "slider",
+    "carousel",
+    "headless",
+    "swipe"
+  ],
+  "license": "MIT",
+  "repository": "github:5ym/svelte-slider",
+  "homepage": "https://5ym.github.io/svelte-slider/",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "svelte": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "peerDependencies": {
+    "svelte": "^5.29.0"
+  }
+}
