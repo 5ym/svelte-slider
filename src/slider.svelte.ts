@@ -7,30 +7,51 @@ export interface SliderOptions {
 	autoplay?: number;
 	/** 端で next / prev したとき反対側の端へ戻るか。既定 true */
 	rewind?: boolean;
-	/** ボタン・ドット・自動スライドのアニメーション時間 (ms)。既定 400 */
-	duration?: number;
 }
 
-/** これ以上の速度 (px/ms) で離したらフリックとみなす */
+/** これ以上の速度 (px/ms) で離したらフリックとみなす(マウスドラッグのみ) */
 const FLICK_VELOCITY = 0.3;
-/** ドラッグ開始とみなす移動量 (px)。これ未満はタップ扱い */
+/** ドラッグ開始とみなす移動量 (px)。これ未満はクリック扱い */
 const DRAG_THRESHOLD = 6;
-/**
- * 離す直前のこの時間 (ms) の動きから速度を求める。
- * フリックは離す直前に加速するので、長く取ると平均に引っ張られて遅く見積もってしまう
- */
+/** 離す直前のこの時間 (ms) の動きから速度を求める */
 const VELOCITY_WINDOW = 40;
-const MIN_FLICK_DURATION = 80;
-const MAX_FLICK_DURATION = 350;
+/** scrollend が来ない環境向けに、最後の scroll からこの時間 (ms) でスクロール終了とみなす */
+const SCROLL_IDLE = 150;
+
+/**
+ * スライダーの動きそのもの。スワイプ・フリック・スナップ・キー操作はブラウザの
+ * スクロールと scroll-snap に任せる。詳細度 0 なので利用側の CSS で上書きできる
+ */
+const BASE_CSS = `
+:where([data-slider-viewport]) {
+	display: flex;
+	position: relative;
+	overflow-x: auto;
+	overscroll-behavior-x: contain;
+	scroll-snap-type: x mandatory;
+	scrollbar-width: none;
+}
+:where([data-slider-viewport])::-webkit-scrollbar {
+	display: none;
+}
+:where([data-slider-slide]) {
+	flex-shrink: 0;
+	scroll-snap-align: start;
+	scroll-snap-stop: always;
+}
+`;
+
+let sheet: CSSStyleSheet | undefined;
+
+/** BASE_CSS を文書に一度だけ追加する */
+function adoptBaseStyles() {
+	if (sheet) return;
+	sheet = new CSSStyleSheet();
+	sheet.replaceSync(BASE_CSS);
+	document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+}
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
-/** 等減速(初速 = 2 * 距離 / 時間)。cubic より終盤のもたつきが少ない */
-const easeOutQuad = (t: number) => 1 - (1 - t) ** 2;
-const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2);
-
-/** 端を越えて引っ張ったときの抵抗(iOS のラバーバンド相当) */
-const rubberBand = (overshoot: number, size: number) =>
-	(1 - 1 / ((overshoot * 0.55) / size + 1)) * size;
 
 let uid = 0;
 
@@ -40,9 +61,7 @@ let uid = 0;
  * ```svelte
  * <section {...slider.root} aria-label="お知らせ">
  *   <div {...slider.viewport}>
- *     <div {...slider.track}>
- *       {#each items as item, i}<div {...slider.slide(i)}>…</div>{/each}
- *     </div>
+ *     {#each items as item, i}<div {...slider.slide(i)}>…</div>{/each}
  *   </div>
  *   <button {...slider.prevButton}>前へ</button>
  *   <button {...slider.nextButton}>次へ</button>
@@ -51,54 +70,49 @@ let uid = 0;
  * ```
  */
 export class Slider {
-	/** 現在(移動中なら移動先)のスライド番号 */
+	/** 現在(ボタン等で移動中なら移動先)のスライド番号 */
 	index = $state(0);
 	/** スナップ位置の数(= ページ数)。スライド幅の合計が足りない分は末尾がまとめられる */
 	count = $state(0);
-	/** ユーザーがドラッグ中か */
+	/** ユーザーがマウスでドラッグ中か */
 	dragging = $state(false);
 	/** 以下の設定は実行中にも変更できる。意味は SliderOptions を参照 */
 	autoplay = $state(4000);
 	rewind = $state(true);
-	duration = $state(400);
 	/** 自動スライドを手動で止めているか(再生/停止ボタン用) */
 	paused = $state(false);
 
-	#trackId = `slider-${++uid}-track`;
+	#viewportId = `slider-${++uid}-viewport`;
 	#viewport: HTMLElement | undefined;
-	#track: HTMLElement | undefined;
 	#snaps: number[] = [];
-	#width = 0;
-	#max = 0;
-	/** 現在の表示位置 (px)。右へ進むほど大きい */
-	#offset = 0;
-	#raf = 0;
 
+	/** スクロール中か(タッチ・ホイール・ボタンによる移動を問わない) */
+	#scrolling = $state(false);
 	#hovered = $state(false);
 	#focused = $state(false);
 	#hidden = $state(false);
+
+	/** goTo によるスクロール中は、途中の位置で index を書き換えない */
+	#seeking = false;
+	#idleTimer: ReturnType<typeof setTimeout> | undefined;
 
 	#gesture:
 		| {
 				id: number;
 				x: number;
-				y: number;
-				offset: number;
-				/** 掴んだ時点の移動先(アニメーション中ならその行き先) */
-				index: number;
+				scrollLeft: number;
 				samples: { x: number; t: number }[];
 		  }
 		| undefined;
 	#suppressClick = false;
 
-	#viewportKey = createAttachmentKey();
-	#trackKey = createAttachmentKey();
 	#rootKey = createAttachmentKey();
+	#viewportKey = createAttachmentKey();
+	#slideKey = createAttachmentKey();
 
 	constructor(options: SliderOptions = {}) {
 		this.autoplay = options.autoplay ?? this.autoplay;
 		this.rewind = options.rewind ?? this.rewind;
-		this.duration = options.duration ?? this.duration;
 	}
 
 	get canPrev() {
@@ -116,6 +130,7 @@ export class Slider {
 			this.count > 1 &&
 			!this.paused &&
 			!this.dragging &&
+			!this.#scrolling &&
 			!this.#hovered &&
 			!this.#focused &&
 			!this.#hidden
@@ -126,20 +141,20 @@ export class Slider {
 	// 操作
 	// ------------------------------------------------------------------
 
-	next(duration = this.duration) {
-		if (this.index < this.count - 1) this.goTo(this.index + 1, duration);
-		else if (this.rewind) this.goTo(0, duration);
+	next() {
+		if (this.index < this.count - 1) this.goTo(this.index + 1);
+		else if (this.rewind) this.goTo(0);
 	}
 
-	prev(duration = this.duration) {
-		if (this.index > 0) this.goTo(this.index - 1, duration);
-		else if (this.rewind) this.goTo(this.count - 1, duration);
+	prev() {
+		if (this.index > 0) this.goTo(this.index - 1);
+		else if (this.rewind) this.goTo(this.count - 1);
 	}
 
-	goTo(index: number, duration = this.duration) {
+	goTo(index: number) {
 		if (this.dragging || this.count === 0) return;
 		this.index = clamp(index, 0, this.count - 1);
-		this.#animateTo(this.#snaps[this.index], reducedMotion() ? 0 : duration, easeInOutCubic);
+		this.#scrollTo(this.#snaps[this.index]);
 	}
 
 	// ------------------------------------------------------------------
@@ -150,7 +165,6 @@ export class Slider {
 		return {
 			role: 'region',
 			'aria-roledescription': 'carousel',
-			onkeydown: this.#onKeydown,
 			onpointerenter: this.#onPointerEnter,
 			onpointerleave: this.#onPointerLeave,
 			onfocusin: this.#onFocusIn,
@@ -161,17 +175,15 @@ export class Slider {
 
 	get viewport() {
 		return {
+			id: this.#viewportId,
+			// 矢印キーでのスクロールはブラウザに任せる
+			tabindex: 0,
+			onkeydown: this.#onKeydown,
 			'aria-live': this.playing ? 'off' : 'polite',
+			'data-slider-viewport': '',
 			'data-dragging': this.dragging || undefined,
 			[this.#viewportKey]: this.#attachViewport
 		} as const;
-	}
-
-	get track() {
-		return {
-			id: this.#trackId,
-			[this.#trackKey]: this.#attachTrack
-		};
 	}
 
 	slide(i: number) {
@@ -179,7 +191,9 @@ export class Slider {
 			role: 'group',
 			'aria-roledescription': 'slide',
 			'aria-label': `${i + 1} / ${this.count}`,
-			'data-active': i === this.index || undefined
+			'data-slider-slide': '',
+			'data-active': i === this.index || undefined,
+			[this.#slideKey]: this.#attachSlide
 		};
 	}
 
@@ -187,7 +201,7 @@ export class Slider {
 		return {
 			type: 'button',
 			'aria-label': '前へ',
-			'aria-controls': this.#trackId,
+			'aria-controls': this.#viewportId,
 			disabled: !this.canPrev,
 			onclick: () => this.prev()
 		} as const;
@@ -197,7 +211,7 @@ export class Slider {
 		return {
 			type: 'button',
 			'aria-label': '次へ',
-			'aria-controls': this.#trackId,
+			'aria-controls': this.#viewportId,
 			disabled: !this.canNext,
 			onclick: () => this.next()
 		} as const;
@@ -207,7 +221,7 @@ export class Slider {
 		return {
 			type: 'button',
 			'aria-label': `スライド ${i + 1}`,
-			'aria-controls': this.#trackId,
+			'aria-controls': this.#viewportId,
 			'aria-current': i === this.index ? 'true' : undefined,
 			'data-active': i === this.index || undefined,
 			onclick: () => this.goTo(i)
@@ -243,11 +257,8 @@ export class Slider {
 	};
 
 	#attachViewport: Attachment<HTMLElement> = (node) => {
+		adoptBaseStyles();
 		this.#viewport = node;
-		node.style.overflow = 'hidden';
-		// 縦スクロールはブラウザに任せ、横方向のジェスチャだけを受け取る
-		node.style.touchAction = 'pan-y';
-		node.style.overscrollBehaviorX = 'contain';
 
 		const offs = [
 			on(node, 'pointerdown', this.#onPointerDown),
@@ -257,22 +268,9 @@ export class Slider {
 			on(node, 'lostpointercapture', this.#onLostCapture),
 			on(node, 'click', this.#onClickCapture, { capture: true }),
 			on(node, 'dragstart', (e) => e.preventDefault()),
-			on(node, 'scroll', this.#onScroll)
+			on(node, 'scroll', this.#onScroll, { passive: true }),
+			on(node, 'scrollend', this.#onScrollEnd)
 		];
-		this.#measure();
-
-		return () => {
-			for (const off of offs) off();
-			this.#stop();
-			this.#viewport = undefined;
-		};
-	};
-
-	#attachTrack: Attachment<HTMLElement> = (node) => {
-		this.#track = node;
-		node.style.display = 'flex';
-		node.style.position = 'relative';
-		node.style.willChange = 'transform';
 
 		const resize = new ResizeObserver(() => this.#measure());
 		const observeChildren = () => {
@@ -289,30 +287,29 @@ export class Slider {
 		this.#measure();
 
 		return () => {
+			for (const off of offs) off();
 			resize.disconnect();
 			mutation.disconnect();
-			this.#track = undefined;
+			clearTimeout(this.#idleTimer);
+			this.#viewport = undefined;
 		};
 	};
 
+	#attachSlide: Attachment<HTMLElement> = () => adoptBaseStyles();
+
 	// ------------------------------------------------------------------
-	// 位置計算と描画
+	// 位置計算とスクロール
 	// ------------------------------------------------------------------
 
 	#measure() {
 		const viewport = this.#viewport;
-		const track = this.#track;
-		if (!viewport || !track) return;
+		if (!viewport) return;
 
-		this.#width = viewport.clientWidth;
-		const children = Array.from(track.children) as HTMLElement[];
-		const end = children.reduce((m, el) => Math.max(m, el.offsetLeft + el.offsetWidth), 0);
-		this.#max = Math.max(0, end - this.#width);
-
+		const max = Math.max(0, viewport.scrollWidth - viewport.clientWidth);
 		// 各スライドの左端をスナップ位置にする。末尾で表示しきれない分は max にまとめる
 		const snaps: number[] = [];
-		for (const el of children) {
-			const pos = Math.min(el.offsetLeft, this.#max);
+		for (const el of viewport.children as HTMLCollectionOf<HTMLElement>) {
+			const pos = Math.min(el.offsetLeft, max);
 			if (snaps.length === 0 || pos - snaps[snaps.length - 1] > 1) snaps.push(pos);
 		}
 		this.#snaps = snaps;
@@ -320,124 +317,98 @@ export class Slider {
 		untrack(() => {
 			this.count = snaps.length;
 			if (this.index > Math.max(0, snaps.length - 1)) this.index = Math.max(0, snaps.length - 1);
-			// 操作中でなければ現在のスライド位置へ合わせ直す(リサイズ追従)
-			if (!this.dragging && !this.#raf) this.#setOffset(snaps[this.index] ?? 0);
 		});
 	}
 
-	#setOffset(offset: number) {
-		this.#offset = offset;
-		if (this.#track) this.#track.style.transform = `translate3d(${-offset}px, 0, 0)`;
-	}
-
-	#stop() {
-		cancelAnimationFrame(this.#raf);
-		this.#raf = 0;
-	}
-
-	#animateTo(target: number, duration: number, ease: (t: number) => number) {
-		this.#stop();
-		const from = this.#offset;
-		const delta = target - from;
-		if (duration <= 0 || Math.abs(delta) < 0.5) {
-			this.#setOffset(target);
-			return;
-		}
-		const start = performance.now();
-		const step = (now: number) => {
-			const t = Math.min(1, (now - start) / duration);
-			this.#setOffset(from + delta * ease(t));
-			this.#raf = t < 1 ? requestAnimationFrame(step) : 0;
-		};
-		this.#raf = requestAnimationFrame(step);
-	}
-
-	#nearest(offset: number) {
+	#nearest(scrollLeft: number) {
 		let best = 0;
 		for (let i = 1; i < this.#snaps.length; i++) {
-			if (Math.abs(this.#snaps[i] - offset) < Math.abs(this.#snaps[best] - offset)) best = i;
+			if (Math.abs(this.#snaps[i] - scrollLeft) < Math.abs(this.#snaps[best] - scrollLeft)) best = i;
 		}
 		return best;
 	}
 
-	/** 指を離したとき、速度 (px/ms, 右向き正) に応じて行き先を決めて移動する */
-	#release(velocity: number, from = this.index) {
-		const offset = this.#offset;
-		const snaps = this.#snaps;
-		let target = this.#nearest(offset);
-
-		if (Math.abs(velocity) > FLICK_VELOCITY) {
-			// フリック: 指の向きの次のスナップ位置へ
-			const forward = velocity < 0;
-			let i = forward
-				? snaps.findIndex((s) => s > offset + 1)
-				: snaps.findLastIndex((s) => s < offset - 1);
-			// 同じ向きへ移動中に再度フリックしたら、移動先のさらに次へ(連続フリック)
-			if (forward && snaps[from] > offset + 1) i = Math.min(from + 1, snaps.length - 1);
-			if (!forward && snaps[from] < offset - 1) i = Math.max(from - 1, 0);
-			if (i !== -1) target = i;
+	#scrollTo(left = 0) {
+		const viewport = this.#viewport;
+		if (!viewport) return;
+		if (Math.abs(viewport.scrollLeft - left) < 1) {
+			this.#endFreeScroll();
+			return;
 		}
-
-		this.index = target;
-		const to = this.#snaps[target] ?? 0;
-		const distance = Math.abs(to - offset);
-		// 初速 (2 * 距離 / 時間) が離した瞬間の指の速度と揃うように時間を決める
-		const speed = Math.abs(velocity);
-		const duration =
-			speed > FLICK_VELOCITY
-				? clamp((2 * distance) / speed, MIN_FLICK_DURATION, MAX_FLICK_DURATION)
-				: clamp(distance * 1.2, MIN_FLICK_DURATION, this.duration);
-		this.#animateTo(to, duration, easeOutQuad);
+		this.#seeking = true;
+		viewport.scrollTo({ left, behavior: reducedMotion() ? 'instant' : 'smooth' });
 	}
 
+	/** マウスドラッグ中と、離した後の移動中はスナップを外して scrollLeft を直接動かす */
+	#startFreeScroll() {
+		const style = this.#viewport?.style;
+		style?.setProperty('scroll-snap-type', 'none');
+		style?.setProperty('scroll-behavior', 'auto');
+		style?.setProperty('user-select', 'none');
+	}
+
+	#endFreeScroll() {
+		const style = this.#viewport?.style;
+		style?.removeProperty('scroll-snap-type');
+		style?.removeProperty('scroll-behavior');
+		style?.removeProperty('user-select');
+	}
+
+	#onScroll = () => {
+		const viewport = this.#viewport;
+		if (!viewport) return;
+		this.#scrolling = true;
+		if (!this.#seeking && !this.dragging) this.index = this.#nearest(viewport.scrollLeft);
+		clearTimeout(this.#idleTimer);
+		this.#idleTimer = setTimeout(this.#onScrollEnd, SCROLL_IDLE);
+	};
+
+	#onScrollEnd = () => {
+		const viewport = this.#viewport;
+		if (!viewport || this.dragging) return;
+		clearTimeout(this.#idleTimer);
+		this.#seeking = false;
+		this.#scrolling = false;
+		this.#endFreeScroll();
+		this.index = this.#nearest(viewport.scrollLeft);
+	};
+
 	// ------------------------------------------------------------------
-	// イベント
+	// マウスドラッグ(タッチはブラウザのスクロールに任せる)
 	// ------------------------------------------------------------------
 
 	#onPointerDown = (e: PointerEvent) => {
-		if (!e.isPrimary || e.button !== 0 || this.count === 0) return;
-		// アニメーション中に掴んだらその場で止める(連続スワイプ対応)
-		this.#stop();
+		if (e.pointerType !== 'mouse' || e.button !== 0 || !this.#viewport || this.count === 0) return;
 		this.#gesture = {
 			id: e.pointerId,
 			x: e.clientX,
-			y: e.clientY,
-			offset: this.#offset,
-			index: this.index,
+			scrollLeft: this.#viewport.scrollLeft,
 			samples: [{ x: e.clientX, t: e.timeStamp }]
 		};
 	};
 
 	#onPointerMove = (e: PointerEvent) => {
 		const g = this.#gesture;
-		if (!g || e.pointerId !== g.id) return;
+		const viewport = this.#viewport;
+		if (!g || !viewport || e.pointerId !== g.id) return;
 		const dx = e.clientX - g.x;
-		const dy = e.clientY - g.y;
 
 		if (!this.dragging) {
-			if (Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
-			// 縦方向の動きが勝ったらスライド操作ではない
-			if (Math.abs(dy) > Math.abs(dx)) {
-				this.#endGesture(0);
-				return;
-			}
+			if (Math.abs(dx) < DRAG_THRESHOLD) return;
 			this.dragging = true;
-			this.#viewport?.setPointerCapture(e.pointerId);
-			this.#viewport?.style.setProperty('user-select', 'none');
+			this.#seeking = false;
+			viewport.setPointerCapture(e.pointerId);
+			// 移動中に掴んだらその位置から動かす
+			g.scrollLeft = viewport.scrollLeft;
+			g.x = e.clientX;
+			this.#startFreeScroll();
 			getSelection()?.removeAllRanges();
 		}
 
 		e.preventDefault();
-		let offset = g.offset - dx;
-		if (offset < 0) offset = -rubberBand(-offset, this.#width);
-		else if (offset > this.#max) offset = this.#max + rubberBand(offset - this.#max, this.#width);
-		this.#setOffset(offset);
+		viewport.scrollLeft = g.scrollLeft - (e.clientX - g.x);
 
-		// ブラウザがフレーム単位にまとめた move も拾って速度の精度を上げる
-		const events = e.getCoalescedEvents?.() ?? [];
-		for (const ev of events.length ? events : [e]) {
-			g.samples.push({ x: ev.clientX, t: ev.timeStamp });
-		}
+		for (const ev of e.getCoalescedEvents?.() ?? [e]) g.samples.push({ x: ev.clientX, t: ev.timeStamp });
 		while (g.samples.length > 2 && e.timeStamp - g.samples[0].t > VELOCITY_WINDOW) {
 			g.samples.shift();
 		}
@@ -461,23 +432,33 @@ export class Slider {
 		if (this.#gesture?.id === e.pointerId) this.#endGesture(0);
 	};
 
-	// タッチでは子要素(リンク等)が暗黙にキャプチャしており、viewport へ移すと
-	// 子要素の lostpointercapture がバブリングしてくるので viewport 自身のものだけ見る
 	#onLostCapture = (e: PointerEvent) => {
 		if (e.target === e.currentTarget) this.#onPointerCancel(e);
 	};
 
 	#endGesture(velocity: number) {
+		const viewport = this.#viewport;
 		const pointerId = this.#gesture?.id;
-		const from = this.#gesture?.index;
 		this.#gesture = undefined;
-		if (pointerId !== undefined && this.#viewport?.hasPointerCapture(pointerId)) {
-			this.#viewport.releasePointerCapture(pointerId);
+		if (!viewport || !this.dragging) return;
+		if (pointerId !== undefined && viewport.hasPointerCapture(pointerId)) {
+			viewport.releasePointerCapture(pointerId);
 		}
-		this.#viewport?.style.removeProperty('user-select');
 		this.dragging = false;
-		// 掴んで止めただけの場合も含め、必ずスナップ位置へ戻す
-		this.#release(velocity, from);
+
+		// 速く離したら指の向きの次のスナップ位置へ、そうでなければ近い方へ
+		const left = viewport.scrollLeft;
+		let target = this.#nearest(left);
+		if (Math.abs(velocity) > FLICK_VELOCITY) {
+			const i =
+				velocity < 0
+					? this.#snaps.findIndex((s) => s > left + 1)
+					: this.#snaps.findLastIndex((s) => s < left - 1);
+			if (i !== -1) target = i;
+		}
+		// スナップを外したまま行き先まで動かし、止まったら戻す(戻した瞬間に近い方へ吸い寄せられないように)
+		this.index = target;
+		this.#scrollTo(this.#snaps[target]);
 		// ドラッグ後に click が来なかった場合に備えて解除
 		setTimeout(() => (this.#suppressClick = false));
 	}
@@ -490,28 +471,12 @@ export class Slider {
 		e.stopPropagation();
 	};
 
-	/** フォーカス移動などでブラウザが viewport をスクロールさせたら打ち消して該当スライドへ */
-	#onScroll = () => {
-		const viewport = this.#viewport;
-		if (!viewport || viewport.scrollLeft === 0) return;
-		const shifted = this.#offset + viewport.scrollLeft;
-		viewport.scrollLeft = 0;
-		this.#setOffset(shifted);
-		this.goTo(this.#nearest(shifted));
-	};
-
+	/** scroll-snap-stop: always だと Home・End も 1 枚ずつしか進まないので、そこだけ受け持つ */
 	#onKeydown = (e: KeyboardEvent) => {
+		if (e.key !== 'Home' && e.key !== 'End') return;
 		if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-		const keys: Record<string, () => void> = {
-			ArrowLeft: () => this.prev(),
-			ArrowRight: () => this.next(),
-			Home: () => this.goTo(0),
-			End: () => this.goTo(this.count - 1)
-		};
-		const action = keys[e.key];
-		if (!action) return;
 		e.preventDefault();
-		action();
+		this.goTo(e.key === 'Home' ? 0 : this.count - 1);
 	};
 
 	#onPointerEnter = (e: PointerEvent) => {

@@ -35,7 +35,7 @@ test.describe('自動スライド停止', () => {
 			.evaluate((b: HTMLButtonElement) => (b.click(), b.click(), b.click()));
 		await settle(page);
 		expect(await c.index()).toBe(2);
-		expect(await c.offset()).toBeCloseTo(-2 * (await c.width()), 0);
+		expect(await c.scroll()).toBeCloseTo(2 * (await c.width()), 0);
 	});
 
 	test('ドットで指定のスライドへ移る', async ({ page }) => {
@@ -45,9 +45,9 @@ test.describe('自動スライド停止', () => {
 		expect(await c.index()).toBe(3);
 	});
 
-	test('矢印キー・Home・End で操作できる', async ({ page }) => {
+	test('矢印キー・Home・End で操作できる(ブラウザのスクロール)', async ({ page }) => {
 		const c = carousel(page);
-		await c.root.getByRole('button', { name: '次へ' }).focus();
+		await c.viewport.focus();
 		for (const [key, expected] of [
 			['ArrowRight', 1],
 			['ArrowRight', 2],
@@ -61,13 +61,25 @@ test.describe('自動スライド停止', () => {
 		}
 	});
 
-	test('複数枚表示は 3 枚ずつで 6 ページ、末尾で次へは無効', async ({ page }) => {
+	test('複数枚表示は 3 枚ずつで 6 ページ、CSS の次へボタンで末尾まで進む', async ({ page }) => {
 		const cards = carousel(page, 1);
-		await expect(cards.root.locator('small')).toHaveText('1 / 6');
-		const next = cards.root.getByRole('button', { name: '次へ' });
-		for (let i = 0; i < 5; i++) await next.click();
-		await expect(cards.root.locator('small')).toHaveText('6 / 6');
-		await expect(next).toBeDisabled();
+		await expect(cards.root.locator('.card-slide').first()).toHaveAttribute('aria-label', '1 / 6');
+		// Chromium では ::scroll-button で描くので JS のボタンは出ない
+		await expect(cards.root.locator('.card-fallback')).toBeHidden();
+
+		// 疑似要素は locator で掴めないので、viewport の右下(次へボタンの位置)をクリックする
+		await cards.root.scrollIntoViewIfNeeded();
+		const box = (await cards.viewport.boundingBox())!;
+		const clickNext = () => page.mouse.click(box.x + box.width - 20, box.y + box.height + 30);
+		await clickNext();
+		await settle(page);
+		expect(await cards.scroll()).toBeGreaterThan(0);
+		for (let i = 0; i < 6; i++) {
+			await clickNext();
+			await settle(page);
+		}
+		expect(await cards.scroll()).toBeCloseTo(await cards.maxScroll(), 0);
+		await expect(cards.root.locator('.card-slide').nth(5)).toHaveAttribute('data-active');
 	});
 });
 
