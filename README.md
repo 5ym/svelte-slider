@@ -1,6 +1,6 @@
 # svelte-slider
 
-フリック速度の計算等によりスマホに近いスライド操作を実現したスライダー。
+ブラウザのスクロールと CSS scroll-snap でスマホそのままのスライド操作を実現したスライダー。
 
 動作サンプル: https://5ym.github.io/svelte-slider/
 
@@ -8,21 +8,60 @@
 見た目は一切持たず、状態・操作・要素に spread する属性だけを `Slider` クラスが提供します。
 サンプル(`demo/`)は [Blades CSS](https://blades.dev/) でスタイリングしています。
 
+## 仕組み
+
+v4 から、動きはできるだけ CSS とブラウザに任せています。
+
+| 機能 | 担当 |
+| --- | --- |
+| スワイプ・フリック(慣性)・スナップ・端のバウンド・縦スクロールとの両立 | ブラウザのスクロール + `scroll-snap`(CSS) |
+| 1 回のフリックで 1 枚ずつ | `scroll-snap-stop: always`(CSS) |
+| 矢印キー | ブラウザのスクロール |
+| 前後ボタン・ドット | JS(`prevButton` など)。Chromium 系なら CSS の `::scroll-button()` / `::scroll-marker` だけでも作れる(サンプルの「複数枚表示」) |
+| マウスドラッグ・自動スライド・端から反対側へ戻る(rewind)・Home / End・`index` | JS |
+
+`viewport` と `slide(i)` には `data-slider-viewport` / `data-slider-slide` 属性が付き、
+次の CSS が詳細度 0(`:where()`)で自動的に読み込まれます。利用側の CSS でそのまま上書きできます。
+
+```css
+:where([data-slider-viewport]) {
+	display: flex;
+	position: relative;
+	overflow-x: auto;
+	overscroll-behavior-x: contain;
+	scroll-snap-type: x mandatory;
+	scrollbar-width: none;
+}
+:where([data-slider-slide]) {
+	flex-shrink: 0;
+	scroll-snap-align: start;
+	scroll-snap-stop: always;
+}
+```
+
+フリックの速さ・慣性・端のバウンドは OS とブラウザの実装そのままになります(iOS と Android で手触りが違うのは仕様です)。
+ボタンでの移動は `scrollTo({ behavior: 'smooth' })` なので、移動時間とイージングは指定できません。
+
+次の使い方には対応していません。
+
+- `dir="rtl"`(右から左へ並べる)
+- `viewport` への `padding` / `scroll-padding`(余白はスライド側に付けてください)
+- Shadow DOM の中での利用(基本の CSS は `document` にだけ読み込まれます)
+
 ## 機能
 
-- スワイプ(指に追従、端ではラバーバンド)/ マウスドラッグ
-- フリック: 離した瞬間の速度から移動時間を決定。アニメーション中に掴んで連続フリック可能
-- 縦スクロールを妨げない(`touch-action: pan-y` + Pointer Events)
+- スワイプ / フリック / マウスドラッグ(マウスドラッグは離した速度で次へ進むか判定)
+- 縦スクロールを妨げない
 - ドラッグ後はスライド内リンクのクリックを抑止
-- 自動スライド(操作でリセット、ホバー・キーボードフォーカス・タブ非表示中は停止)
+- 自動スライド(操作でリセット、ホバー・キーボードフォーカス・スクロール中・タブ非表示中は停止)
 - 前後ボタン / ページングドット / 矢印キー・Home・End
 - スライド幅は CSS で自由(1 枚表示・複数枚表示・ピーク表示など)。リサイズに追従
-- `prefers-reduced-motion` でボタン等のアニメーションを無効化
+- `prefers-reduced-motion` ならボタン等での移動をアニメーションさせない
 
 ## インストール
 
 npm レジストリには未公開です。GitHub の `release` ブランチ(ビルド済み)から直接インストールします。
-`#v3.0.0` のようにタグを指定するとバージョンを固定できます。Svelte 5.29 以上が必要です。
+`#v4.0.0` のようにタグを指定するとバージョンを固定できます。Svelte 5.29 以上が必要です。
 
 ```shell
 bun add github:5ym/svelte-slider#release
@@ -39,16 +78,14 @@ npm 12 以降は git 依存がデフォルトで無効なので `--allow-git=roo
 <script lang="ts">
 	import { Slider } from 'svelte-slider';
 
-	const slider = new Slider({ autoplay: 4000, rewind: true, duration: 400 });
+	const slider = new Slider({ autoplay: 4000, rewind: true });
 </script>
 
 <section {...slider.root} aria-label="お知らせ">
 	<div {...slider.viewport}>
-		<div {...slider.track}>
-			{#each items as item, i}
-				<div class="slide" {...slider.slide(i)}>…</div>
-			{/each}
-		</div>
+		{#each items as item, i}
+			<div class="slide" {...slider.slide(i)}>…</div>
+		{/each}
 	</div>
 
 	<button {...slider.prevButton}>前へ</button>
@@ -66,17 +103,24 @@ npm 12 以降は git 依存がデフォルトで無効なので `--allow-git=roo
 
 | props | 役割 |
 | --- | --- |
-| `root` | カルーセル全体。キーボード操作・自動スライドの停止条件(ホバー/フォーカス) |
-| `viewport` | 表示領域。ジェスチャを受け取る(`overflow: hidden` 等を自動付与) |
-| `track` | スライドを並べる要素(`display: flex` と `transform` を自動付与) |
+| `root` | カルーセル全体。自動スライドの停止条件(ホバー/フォーカス) |
+| `viewport` | スクロールコンテナ。スライドを直接並べる。フォーカス可能(矢印キー・Home・End) |
 | `slide(i)` | 各スライドの ARIA 属性。現在のスライドに `data-active` |
 | `prevButton` / `nextButton` / `dot(i)` / `playButton` | 各ボタン。`aria-label` は後ろに書けば上書き可 |
 
 状態: `index` / `count` / `dragging` / `playing` / `canPrev` / `canNext`
-設定(実行中に変更可): `autoplay`(ms、0 で無効) / `paused` / `rewind` / `duration`
+設定(実行中に変更可): `autoplay`(ms、0 で無効) / `paused` / `rewind`
 操作: `next()` / `prev()` / `goTo(i)`
 
 `data-dragging`(viewport)や `data-active`(slide / dot)をスタイルのフックに使えます。
+`index` はスワイプ中もスクロール位置に合わせて更新されます。
+
+### v3 からの移行
+
+- `track` はなくなりました。スライドは `viewport` の直下に置きます(`gap` なども `viewport` へ)
+- `duration` はなくなりました(移動時間はブラウザが決めます)
+- `viewport` は `overflow: hidden` + `transform` ではなく、横スクロールするコンテナになりました
+- 移動中のスライドを続けてフリックしても、今の位置から次のスライドまでしか進みません(ブラウザの挙動)
 
 ## 開発
 
@@ -91,7 +135,7 @@ bun run test     # ブラウザでの操作テスト(Playwright。初回は bunx
 
 GitHub Actions(`.github/workflows/ci.yml`)が PR と `m` への push で型チェック・配布設定のチェック(publint)・テストを実行します。
 `m` への push でそれらが通ると、サンプルサイトを GitHub Pages へデプロイし、ビルド済みライブラリを `release` ブランチへコミットします。
-`package.json` の `version` を上げると、そのバージョンのタグ(`v3.0.1` など)も自動で作られます。
+`package.json` の `version` を上げると、そのバージョンのタグ(`v4.0.1` など)も自動で作られます。
 
 ## ライセンス
 

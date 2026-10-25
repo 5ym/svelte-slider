@@ -12,11 +12,10 @@ export function carousel(page: Page, n = 0) {
 			root
 				.locator('.dot')
 				.evaluateAll((els) => els.findIndex((e) => e.getAttribute('aria-current') === 'true')),
-		/** トラックの translateX (px) */
-		offset: () =>
-			viewport.evaluate(
-				(v) => new DOMMatrix(getComputedStyle(v.firstElementChild as Element).transform).m41
-			),
+		/** viewport の横スクロール量 (px) */
+		scroll: () => viewport.evaluate((v) => v.scrollLeft),
+		/** 横スクロールの最大値 (px) */
+		maxScroll: () => viewport.evaluate((v) => v.scrollWidth - v.clientWidth),
 		width: async () => (await viewport.boundingBox())!.width
 	};
 }
@@ -28,8 +27,18 @@ export async function openWithoutAutoplay(page: Page) {
 	await expect(page.locator('input[role=switch]')).not.toBeChecked();
 }
 
-/** 移動アニメーションが終わるのを待つ */
-export const settle = (page: Page) => page.waitForTimeout(600);
+/** 全カルーセルのスクロールが止まるのを待つ(smooth スクロールの時間は距離とブラウザ次第) */
+export async function settle(page: Page) {
+	const read = () =>
+		page.evaluate(() => [...document.querySelectorAll('.viewport')].map((v) => v.scrollLeft).join());
+	let before = '';
+	for (let i = 0; i < 30; i++) {
+		await page.waitForTimeout(150);
+		const now = await read();
+		if (now === before) return;
+		before = now;
+	}
+}
 
 /**
  * CDP で実際のタッチ入力を送る(Pointer Events と touch-action がブラウザ本来の挙動になる)。
@@ -45,15 +54,23 @@ export async function swipe(
 	const x0 = box.x + box.width / 2;
 	const y0 = box.y + box.height / 2;
 	const point = (x: number, y: number) => [{ x, y, id: 1 }];
+	// 速度(=慣性スクロールの強さ)が実際の送信間隔の揺れに左右されないよう、時刻を明示する
+	const t0 = Date.now() / 1000;
+	const at = (i: number) => t0 + (ms * i) / steps / 1000;
 
-	await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: point(x0, y0) });
+	await cdp.send('Input.dispatchTouchEvent', {
+		type: 'touchStart',
+		touchPoints: point(x0, y0),
+		timestamp: at(0)
+	});
 	for (let i = 1; i <= steps; i++) {
 		await page.waitForTimeout(ms / steps);
 		await cdp.send('Input.dispatchTouchEvent', {
 			type: 'touchMove',
-			touchPoints: point(x0 + (dx * i) / steps, y0 + (dy * i) / steps)
+			touchPoints: point(x0 + (dx * i) / steps, y0 + (dy * i) / steps),
+			timestamp: at(i)
 		});
 	}
-	await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+	await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [], timestamp: at(steps) });
 	await cdp.detach();
 }
