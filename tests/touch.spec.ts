@@ -44,11 +44,23 @@ test('移動中に続けてフリックすると移動先のさらに次へ進�
 
 test('短いフリックは指の速さに合わせて素早く収まる', async ({ page }) => {
 	const c = carousel(page);
-	const start = Date.now();
+	// 指を離してから次のスライドに着くまでを、ページ内の時刻で測る
+	const elapsed = c.viewport.evaluate(
+		(v) =>
+			new Promise<number>((resolve) => {
+				v.addEventListener('pointerup', () => {
+					const start = performance.now();
+					const tick = () => {
+						if (Math.abs(v.scrollLeft - v.clientWidth) < 1) resolve(performance.now() - start);
+						else requestAnimationFrame(tick);
+					};
+					tick();
+				});
+			})
+	);
 	await swipe(page, c.viewport, { dx: -120, ms: 60, steps: 6 });
-	await expect.poll(() => c.scroll(), { intervals: [16] }).toBeCloseTo(await c.width(), 0);
-	// 離してから最大 350ms で着く(送信の待ち時間を含めて余裕を見る)
-	expect(Date.now() - start).toBeLessThan(900);
+	// 最大 350ms(フレームの誤差を見込む)
+	expect(await elapsed).toBeLessThan(400);
 });
 
 test('端を越えて引っ張ると抵抗がかかり、離すと戻る', async ({ page }) => {

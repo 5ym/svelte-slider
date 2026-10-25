@@ -18,7 +18,7 @@
 | --- | --- |
 | 指(タッチ・ペン)とマウスのドラッグ、フリック、端のバウンド | JS。離した瞬間の速度から移動時間を決める(下記) |
 | トラックパッド・ホイール・矢印キー | ブラウザのスクロール + `scroll-snap`(CSS) |
-| 縦スクロールとの両立 | `touch-action: pan-y` |
+| 縦スクロール・ピンチズームとの両立 | `touch-action: pan-y pinch-zoom` |
 | 前後ボタン・ドット | JS(`prevButton` など)。Chromium 系なら CSS の `::scroll-button()` / `::scroll-marker` だけでも作れる(サンプルの「複数枚表示」) |
 | 自動スライド・端から反対側へ戻る(rewind)・Home / End・`index` | JS |
 
