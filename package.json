@@ -1,8 +1,8 @@
 {
   "name": "svelte-slider",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "type": "module",
-  "description": "ブラウザのスクロールと CSS scroll-snap で動くヘッドレス Svelte スライダー",
+  "description": "フリックの速さに合わせて素早く収まる、scroll-snap ベースのヘッドレス Svelte スライダー",
   "keywords": [
     "svelte",
     "slider",

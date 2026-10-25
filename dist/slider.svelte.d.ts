@@ -4,6 +4,8 @@ export interface SliderOptions {
     autoplay?: number;
     /** 端で next / prev したとき反対側の端へ戻るか。既定 true */
     rewind?: boolean;
+    /** ボタン・ドット・自動スライドのアニメーション時間 (ms)。既定 400 */
+    duration?: number;
 }
 /**
  * 見た目を持たないスライダー。状態と操作、要素に spread する属性だけを提供する。
@@ -25,11 +27,12 @@ export declare class Slider {
     index: number;
     /** スナップ位置の数(= ページ数)。スライド幅の合計が足りない分は末尾がまとめられる */
     count: number;
-    /** ユーザーがマウスでドラッグ中か */
+    /** ユーザーがドラッグ中か(タッチ・ペン・マウス) */
     dragging: boolean;
     /** 以下の設定は実行中にも変更できる。意味は SliderOptions を参照 */
     autoplay: number;
     rewind: boolean;
+    duration: number;
     /** 自動スライドを手動で止めているか(再生/停止ボタン用) */
     paused: boolean;
     constructor(options?: SliderOptions);
@@ -37,9 +40,9 @@ export declare class Slider {
     get canNext(): boolean;
     /** 自動スライドが実際に動いている状態か */
     get playing(): boolean;
-    next(): void;
-    prev(): void;
-    goTo(index: number): void;
+    next(duration?: number): void;
+    prev(duration?: number): void;
+    goTo(index: number, duration?: number): void;
     get root(): {
         [x: symbol]: Attachment<HTMLElement>;
         role: string;
@@ -59,7 +62,6 @@ export declare class Slider {
         readonly 'data-dragging': true | undefined;
     };
     slide(i: number): {
-        [x: symbol]: Attachment<HTMLElement>;
         role: string;
         'aria-roledescription': string;
         'aria-label': string;
@@ -67,26 +69,26 @@ export declare class Slider {
         'data-active': true | undefined;
     };
     get prevButton(): {
-        readonly type: "button";
-        readonly 'aria-label': "前へ";
-        readonly 'aria-controls': string;
-        readonly disabled: boolean;
-        readonly onclick: () => void;
+        disabled: boolean;
+        type: "button";
+        'aria-label': string;
+        'aria-controls': string;
+        onclick: () => void;
     };
     get nextButton(): {
-        readonly type: "button";
-        readonly 'aria-label': "次へ";
-        readonly 'aria-controls': string;
-        readonly disabled: boolean;
-        readonly onclick: () => void;
+        disabled: boolean;
+        type: "button";
+        'aria-label': string;
+        'aria-controls': string;
+        onclick: () => void;
     };
     dot(i: number): {
-        readonly type: "button";
-        readonly 'aria-label': `\u30B9\u30E9\u30A4\u30C9 ${number}`;
-        readonly 'aria-controls': string;
-        readonly 'aria-current': "true" | undefined;
-        readonly 'data-active': true | undefined;
-        readonly onclick: () => void;
+        'aria-current': "true" | undefined;
+        'data-active': true | undefined;
+        type: "button";
+        'aria-label': string;
+        'aria-controls': string;
+        onclick: () => void;
     };
     /** 再生/停止ボタン用 */
     get playButton(): {
