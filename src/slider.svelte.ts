@@ -475,7 +475,9 @@ export class Slider {
 
 	/** scroll-snap-stop: always だと Home・End も 1 枚ずつしか進まないので、そこだけ受け持つ */
 	#onKeydown = (e: KeyboardEvent) => {
-		if (e.key !== 'Home' && e.key !== 'End') return;
+		if ((e.key !== 'Home' && e.key !== 'End') || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) {
+			return;
+		}
 		if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 		e.preventDefault();
 		this.goTo(e.key === 'Home' ? 0 : this.count - 1);
