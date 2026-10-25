@@ -83,6 +83,24 @@ test.describe('自動スライド停止', () => {
 	});
 });
 
+test('ドラッグして元の位置に戻して離しても自動スライドは止まらない', async ({ page }) => {
+	await page.goto('./');
+	const c = carousel(page);
+	const box = (await c.viewport.boundingBox())!;
+	const x = box.x + box.width / 2;
+	const y = box.y + box.height / 2;
+	await page.mouse.move(x, y);
+	await page.mouse.down();
+	await page.mouse.move(x - 100, y, { steps: 5 });
+	await page.mouse.move(x, y, { steps: 5 });
+	// 元の位置で、スクロールが止まったとみなされるまで掴んだままにしてから離す
+	await page.waitForTimeout(300);
+	await page.mouse.up();
+	// ホバー中は止まるので外へ出す
+	await page.mouse.move(0, 0);
+	await expect(page.getByText('自動スライド (再生中)')).toBeVisible();
+});
+
 test('自動スライドで進む', async ({ page }) => {
 	await page.goto('./');
 	const c = carousel(page);

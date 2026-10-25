@@ -331,8 +331,10 @@ export class Slider {
 	#scrollTo(left = 0) {
 		const viewport = this.#viewport;
 		if (!viewport) return;
+		// 動かない場合は scrollend が来ないので、ここでスクロール終了の後始末をする
+		// (ドラッグして元の位置に戻した場合など。残すと #scrolling が立ったままになる)
 		if (Math.abs(viewport.scrollLeft - left) < 1) {
-			this.#endFreeScroll();
+			this.#onScrollEnd();
 			return;
 		}
 		this.#seeking = true;
