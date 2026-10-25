@@ -38,6 +38,17 @@ test.describe('自動スライド停止', () => {
 		expect(await c.scroll()).toBeCloseTo(2 * (await c.width()), 0);
 	});
 
+	test('トラックパッドの横スクロールはブラウザの scroll-snap でスライドに吸い付く', async ({ page }) => {
+		const c = carousel(page);
+		const box = (await c.viewport.boundingBox())!;
+		await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+		// 半分を超えて流すと、止まったところから近い次のスライドへ吸い付く
+		await page.mouse.wheel(box.width * 0.6, 0);
+		await settle(page);
+		expect(await c.index()).toBe(1);
+		expect(await c.scroll()).toBeCloseTo(await c.width(), 0);
+	});
+
 	test('ドットで指定のスライドへ移る', async ({ page }) => {
 		const c = carousel(page);
 		await c.root.getByRole('button', { name: 'スライド 4' }).click();

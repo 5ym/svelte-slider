@@ -32,6 +32,60 @@ test('ゆっくり半分以上ドラッグすると次のスライドへ移る',
 	expect(await c.index()).toBe(1);
 });
 
+test('移動中に続けてフリックすると移動先のさらに次へ進む', async ({ page }) => {
+	const c = carousel(page);
+	await swipe(page, c.viewport, { dx: -70, ms: 40, steps: 3 });
+	await page.waitForTimeout(60);
+	await swipe(page, c.viewport, { dx: -70, ms: 40, steps: 3 });
+	await settle(page);
+	expect(await c.index()).toBe(2);
+	expect(await c.scroll()).toBeCloseTo(2 * (await c.width()), 0);
+});
+
+test('短いフリックは指の速さに合わせて素早く収まる', async ({ page }) => {
+	const c = carousel(page);
+	// 指を離してから次のスライドに着くまでを、ページ内の時刻で測る
+	const elapsed = c.viewport.evaluate(
+		(v) =>
+			new Promise<number>((resolve) => {
+				v.addEventListener('pointerup', () => {
+					const start = performance.now();
+					const tick = () => {
+						if (Math.abs(v.scrollLeft - v.clientWidth) < 1) resolve(performance.now() - start);
+						else requestAnimationFrame(tick);
+					};
+					tick();
+				});
+			})
+	);
+	await swipe(page, c.viewport, { dx: -120, ms: 60, steps: 6 });
+	// 最大 350ms(フレームの誤差を見込む)
+	expect(await elapsed).toBeLessThan(400);
+});
+
+test('端を越えて引っ張ると抵抗がかかり、離すと戻る', async ({ page }) => {
+	const c = carousel(page);
+	const cdp = await page.context().newCDPSession(page);
+	const box = (await c.viewport.boundingBox())!;
+	const y = box.y + box.height / 2;
+	await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 50, y, id: 1 }] });
+	for (let i = 1; i <= 8; i++) {
+		await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 50 + 25 * i, y, id: 1 }] });
+	}
+	// 端の外側はスライドの translate で見せている
+	const shift = await c.viewport.evaluate(
+		(v) => parseFloat(getComputedStyle(v.firstElementChild!).translate) || 0
+	);
+	// 200px 引っ張っても、抵抗で見た目の移動はそれより小さい
+	expect(shift).toBeGreaterThan(0);
+	expect(shift).toBeLessThan(200);
+	await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+	await cdp.detach();
+	await settle(page);
+	await expect(c.viewport.locator('> *').first()).not.toHaveAttribute('style', /translate/);
+	expect(await c.index()).toBe(0);
+});
+
 test('末尾でさらにフリックしても末尾に留まる', async ({ page }) => {
 	const c = carousel(page);
 	await c.root.locator('.dot').last().click();
