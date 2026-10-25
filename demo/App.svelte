@@ -5,8 +5,8 @@
 	const cards = new Slider({ autoplay: 0, rewind: false });
 
 	const slides = [
-		{ title: 'スワイプ', text: 'ブラウザのスクロールそのもの。慣性も端のバウンドも OS のまま。', hue: 210 },
-		{ title: 'スナップ', text: 'CSS の scroll-snap で 1 枚ずつ止まります。', hue: 280 },
+		{ title: 'スワイプ', text: '指に吸い付くドラッグと、端でのラバーバンド。', hue: 210 },
+		{ title: 'フリック', text: '離した瞬間の速さで、ネイティブアプリのように素早く収まります。', hue: 280 },
 		{ title: '縦スクロール', text: '縦に動かしたときはページのスクロールを邪魔しません。', hue: 340 },
 		{ title: 'ヘッドレス', text: '見た目は持たず、状態と属性だけを提供します。', hue: 30 },
 		{ title: 'アクセシブル', text: '矢印キー・Home / End、ARIA 属性に対応。', hue: 150 }
@@ -16,7 +16,7 @@
 <main class="container">
 	<hgroup>
 		<h1>Svelte Slider</h1>
-		<p>ブラウザのスクロールと CSS scroll-snap で動くヘッドレススライダー。サンプルは Blades CSS でスタイリングしています。</p>
+		<p>フリックの速さに合わせて素早く収まる、scroll-snap ベースのヘッドレススライダー。サンプルは Blades CSS でスタイリングしています。</p>
 	</hgroup>
 
 	<section>

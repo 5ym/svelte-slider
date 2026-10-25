@@ -1,6 +1,7 @@
 # svelte-slider
 
-ブラウザのスクロールと CSS scroll-snap でスマホそのままのスライド操作を実現したスライダー。
+ネイティブアプリのページングのように、フリックの速さに合わせて素早く収まるスライダー。
+土台はブラウザのスクロールと CSS scroll-snap です。
 
 動作サンプル: https://5ym.github.io/svelte-slider/
 
@@ -10,15 +11,22 @@
 
 ## 仕組み
 
-v4 から、動きはできるだけ CSS とブラウザに任せています。
+`viewport` は横スクロールするコンテナで、スナップは CSS の scroll-snap です。
+指で触ったときだけ JS が受け持ちます。
 
 | 機能 | 担当 |
 | --- | --- |
-| スワイプ・フリック(慣性)・スナップ・端のバウンド・縦スクロールとの両立 | ブラウザのスクロール + `scroll-snap`(CSS) |
-| 1 回のフリックで 1 枚ずつ | `scroll-snap-stop: always`(CSS) |
-| 矢印キー | ブラウザのスクロール |
+| 指(タッチ・ペン)とマウスのドラッグ、フリック、端のバウンド | JS。離した瞬間の速度から移動時間を決める(下記) |
+| トラックパッド・ホイール・矢印キー | ブラウザのスクロール + `scroll-snap`(CSS) |
+| 縦スクロールとの両立 | `touch-action: pan-y` |
 | 前後ボタン・ドット | JS(`prevButton` など)。Chromium 系なら CSS の `::scroll-button()` / `::scroll-marker` だけでも作れる(サンプルの「複数枚表示」) |
-| マウスドラッグ・自動スライド・端から反対側へ戻る(rewind)・Home / End・`index` | JS |
+| 自動スライド・端から反対側へ戻る(rewind)・Home / End・`index` | JS |
+
+ブラウザの scroll-snap だけでフリックさせると、慣性で流してから後でスナップ位置へ寄せ直すため、
+止まるまでに 0.5〜0.6 秒ほどかかって重く感じます。そこで指を離したら JS が引き取り、
+ネイティブアプリのページングと同じく「初速 = 離した瞬間の指の速さ」になる時間(80〜350ms)で
+次のスライドへ送ります。強く弾くほど速く着きます。移動中に続けてフリックすると、移動先のさらに次へ進みます。
+JS が読み込まれる前は、ブラウザのネイティブのスワイプで動きます。
 
 `viewport` と `slide(i)` には `data-slider-viewport` / `data-slider-slide` 属性が付き、
 次の CSS が詳細度 0(`:where()`)で自動的に読み込まれます。利用側の CSS でそのまま上書きできます。
@@ -39,9 +47,6 @@ v4 から、動きはできるだけ CSS とブラウザに任せています。
 }
 ```
 
-フリックの速さ・慣性・端のバウンドは OS とブラウザの実装そのままになります(iOS と Android で手触りが違うのは仕様です)。
-ボタンでの移動は `scrollTo({ behavior: 'smooth' })` なので、移動時間とイージングは指定できません。
-
 次の使い方には対応していません。
 
 - `dir="rtl"`(右から左へ並べる)
@@ -50,7 +55,9 @@ v4 から、動きはできるだけ CSS とブラウザに任せています。
 
 ## 機能
 
-- スワイプ / フリック / マウスドラッグ(マウスドラッグは離した速度で次へ進むか判定)
+- スワイプ(指に追従、端ではラバーバンド)/ マウスドラッグ
+- フリック: 離した瞬間の速度から移動時間を決定。移動中に掴んで連続フリック可能
+- トラックパッド・ホイールの横スクロール(ブラウザの scroll-snap)
 - 縦スクロールを妨げない
 - ドラッグ後はスライド内リンクのクリックを抑止
 - 自動スライド(操作でリセット、ホバー・キーボードフォーカス・スクロール中・タブ非表示中は停止)
@@ -61,7 +68,7 @@ v4 から、動きはできるだけ CSS とブラウザに任せています。
 ## インストール
 
 npm レジストリには未公開です。GitHub の `release` ブランチ(ビルド済み)から直接インストールします。
-`#v4.0.0` のようにタグを指定するとバージョンを固定できます。Svelte 5.29 以上が必要です。
+`#v4.1.0` のようにタグを指定するとバージョンを固定できます。Svelte 5.29 以上が必要です。
 
 ```shell
 bun add github:5ym/svelte-slider#release
@@ -78,7 +85,7 @@ npm 12 以降は git 依存がデフォルトで無効なので `--allow-git=roo
 <script lang="ts">
 	import { Slider } from 'svelte-slider';
 
-	const slider = new Slider({ autoplay: 4000, rewind: true });
+	const slider = new Slider({ autoplay: 4000, rewind: true, duration: 400 });
 </script>
 
 <section {...slider.root} aria-label="お知らせ">
@@ -109,18 +116,17 @@ npm 12 以降は git 依存がデフォルトで無効なので `--allow-git=roo
 | `prevButton` / `nextButton` / `dot(i)` / `playButton` | 各ボタン。`aria-label` は後ろに書けば上書き可 |
 
 状態: `index` / `count` / `dragging` / `playing` / `canPrev` / `canNext`
-設定(実行中に変更可): `autoplay`(ms、0 で無効) / `paused` / `rewind`
+設定(実行中に変更可): `autoplay`(ms、0 で無効) / `paused` / `rewind` / `duration`(ボタン・ドット・自動スライドの移動時間 ms)
 操作: `next()` / `prev()` / `goTo(i)`
 
 `data-dragging`(viewport)や `data-active`(slide / dot)をスタイルのフックに使えます。
-`index` はスワイプ中もスクロール位置に合わせて更新されます。
+`index` はトラックパッドなどでスクロールしている間も位置に合わせて更新されます。
+端のバウンド中はスライドに `translate` を一時的に当てるので、スライドの `translate` プロパティは使わないでください。
 
 ### v3 からの移行
 
 - `track` はなくなりました。スライドは `viewport` の直下に置きます(`gap` なども `viewport` へ)
-- `duration` はなくなりました(移動時間はブラウザが決めます)
 - `viewport` は `overflow: hidden` + `transform` ではなく、横スクロールするコンテナになりました
-- 移動中のスライドを続けてフリックしても、今の位置から次のスライドまでしか進みません(ブラウザの挙動)
 
 ## 開発
 
