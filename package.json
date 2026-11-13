@@ -39,7 +39,7 @@
 	},
 	"devDependencies": {
 		"@anyblades/blades": "^3.1.3",
-		"@playwright/test": "^1.65.0",
+		"@playwright/test": "^1.65.1",
 		"@sveltejs/package": "^3.0.2",
 		"@sveltejs/vite-plugin-svelte": "^7.3.1",
 		"@types/node": "^26.6.6",
