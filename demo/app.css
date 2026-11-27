@@ -1,4 +1,4 @@
-@import "@anyblades/blades";
+@import "@sveti/blades";
 
 /* Blades (Pico) は [role="group"] をボタングループとして装飾するため、スライドでは打ち消す */
 [aria-roledescription="slide"] {
